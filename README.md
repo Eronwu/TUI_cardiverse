@@ -1,36 +1,72 @@
 # Terminal Cardiverse
 
-Terminal Cardiverse is a terminal-native prompt-compiled card strategy game.
+**An AI-native card battle that lives in your terminal.**
 
-The original TypeScript prototype remains in this repo as the rule reference. The next-generation playable is now a Rust + Ratatui terminal battle stage: Boss-forward screen composition, AI card drafting, keyboard-first controls, and deterministic replay files.
+Terminal Cardiverse is a Rust + Ratatui game where natural language becomes playable cards. You forge intent, the LLM compiles it into a draft, and a deterministic local engine decides whether the card is legal, balanced, and executable.
 
-It does not require a real LLM key; the local stub compiler is enough to challenge the first Boss, `INIT ECHO`.
+The game is not a web page pretending to be a terminal. The battle, story, AI card generation, replay, and playtest loop all happen in the real terminal.
 
-## Rust Rebirth Run
+## Why It Exists
 
-Install with Cargo once Rust is available:
+Most AI games let the model improvise everything. Terminal Cardiverse takes the opposite route:
+
+- The LLM is a **semantic compiler**, not the judge.
+- The Rust core is the **battle authority**.
+- Every generated card becomes a draft first.
+- Every playtest can produce replay data, metrics, and issue notes.
+
+The result is a terminal game that can be played by humans, watched as an AI-vs-Boss run, or controlled by external agents through a structured JSONL protocol.
+
+## Current Highlights
+
+- **Rust + Ratatui battle stage**: Boss matrix, active card lane, cache track, subtitle log, and keyboard-first controls.
+- **Prompt-to-card compiler**: OpenAI-compatible LLM support via `.env`, plus deterministic stub mode.
+- **Local rule enforcement**: Card schema normalization, balancing, RAM cost, HP/Sanity tracks, Cache/Daemon/Kernel memory.
+- **Observer mode**: Watch a rule-based or LLM-driven agent play through the TUI.
+- **Agent playtest mode**: Generate `replay.json`, `trace.jsonl`, `metrics.json`, and `issue.md`.
+- **External agent protocol**: Let Codex or another tool read state and submit actions over JSONL.
+- **Legacy TypeScript prototype**: Kept as a reference while the Rust version becomes the primary game.
+
+## Quick Start
 
 ```bash
-cargo install --path crates/cardiverse-cli
-cardiverse
-```
-
-Development run:
-
-```bash
+git clone <your-repo-url>
+cd TUI_cardiverse
 cargo run -p cardiverse-cli -- play --no-ai
 ```
 
-Commands:
+Use a real OpenAI-compatible provider:
 
 ```bash
-cardiverse                  # start battle cockpit
-cardiverse play --no-ai      # force deterministic local card generation
-cardiverse replay <file>     # print a deterministic replay
-cardiverse doctor            # check terminal and LLM env
+cp .env.example .env
+# Fill LLM_API_BASE_URL, LLM_API_KEY, LLM_MODEL_NAME
+cargo run -p cardiverse-cli
 ```
 
-The Rust UI v2 cockpit is organized as a battle stage: Boss matrix on top, active draft/selected card in the center, cache track at the bottom, and subtitle-style battle log on the side.
+The project supports these env names:
+
+```txt
+LLM_API_BASE_URL=https://your-openai-compatible-host/v1
+LLM_API_KEY=...
+LLM_MODEL_NAME=...
+LLM_API_STYLE=auto
+```
+
+Native OpenAI fallback names also work:
+
+```txt
+OPENAI_API_KEY=...
+OPENAI_MODEL=...
+```
+
+## Play
+
+```bash
+cargo run -p cardiverse-cli
+cargo run -p cardiverse-cli -- play --no-ai
+cargo run -p cardiverse-cli -- play --observer rule
+cargo run -p cardiverse-cli -- play --observer llm
+```
 
 Controls:
 
@@ -48,156 +84,111 @@ G            let the rules-only AI play legal actions
 Q            quit
 ```
 
-Replay JSON is saved after each session. By default it goes to the local application data directory; use `--save-replay <path>` to choose a file.
+## Agent Playtest
 
-AI card generation is a core path. When changing compiler or card DSL behavior, run the live `.env` smoke test as well as the normal suite:
+Run a deterministic playtest and generate optimization artifacts:
+
+```bash
+cargo run -p cardiverse-cli -- observe --policy rule --episodes 1 --out .terminal-cardiverse/playtests/latest
+```
+
+Run a live LLM playtest using your project `.env`:
+
+```bash
+cargo run -p cardiverse-cli -- observe --policy llm --episodes 1 --out .terminal-cardiverse/playtests/live
+```
+
+Each playtest writes:
+
+```txt
+replay.json      # deterministic event replay
+trace.jsonl      # state, legal actions, decision, reason, events
+metrics.json     # winner, turns, cards, failed actions, counts
+issue.md         # game design and UX issues for follow-up
+```
+
+External agents can control the game through JSONL:
+
+```bash
+cargo run -p cardiverse-cli -- agent --stdio
+```
+
+Protocol shape:
+
+```json
+{"type":"state","state":{},"legal_actions":[]}
+{"type":"action","action":{"type":"end_turn"},"reason":"bank RAM"}
+{"type":"events","events":[]}
+{"type":"game_over","report":{}}
+```
+
+Invalid actions return an `error` message and do not mutate battle state.
+
+## Architecture
+
+```txt
+crates/
+  cardiverse-core/    deterministic battle engine
+  cardiverse-ai/      LLM compiler, normalizer, AI suggestions
+  cardiverse-agent/   headless playtest, reports, JSONL protocol
+  cardiverse-tui/     Ratatui battle stage
+  cardiverse-cli/     cardiverse command entrypoint
+
+src/                  legacy TypeScript prototype
+```
+
+Core rule: dependencies point inward. The LLM can propose cards and decisions, but it cannot decide battle outcomes.
+
+## Validation
+
+Normal suite:
+
+```bash
+cargo fmt --check
+cargo test
+cargo build
+npm run typecheck
+npm test
+npm run build
+npm audit --audit-level=moderate
+```
+
+Live LLM smoke test:
 
 ```bash
 cargo test -p cardiverse-ai live_llm_compile_accepts_project_env -- --ignored --nocapture
 ```
 
-This test loads the project `.env` and makes a real OpenAI-compatible LLM request. It should not print the API key.
-
-## TypeScript Prototype
-
-## Run
+Live observer smoke test:
 
 ```bash
-npm install
-npm run build
-node dist/cli.js --no-llm
+cargo run -p cardiverse-cli -- observe --policy llm --episodes 1 --max-steps 3 --out .terminal-cardiverse/playtests/llm-smoke
 ```
 
-During development:
+These live tests load the project `.env` and should never print the API key.
+
+## Roadmap
+
+- Better Boss behaviors and more visible intent tells.
+- Stronger card archetypes across Attack, Daemon, and Kernel.
+- Replay viewer and shareable battle summaries.
+- Balance simulation across many AI playtests.
+- GitHub issue templates generated from playtest reports.
+- Optional npm wrapper for Rust binaries.
+
+## Contributing
+
+The best issue includes:
+
+- A replay or `trace.jsonl`.
+- The generated `issue.md` if it came from agent playtest.
+- Your terminal size and provider model.
+- What felt unclear, slow, unfair, or exciting.
+
+The fastest way to find useful issues is:
 
 ```bash
-npm run dev -- --no-llm
+cargo run -p cardiverse-cli -- observe --policy llm --episodes 1 --out .terminal-cardiverse/playtests/live
 ```
 
-## Commands
-
-In a real interactive terminal, the game uses single-key controls. You do not need to type commands and press Enter for common actions:
-
-```txt
-type text                  # starts card-forging prompt input
-Enter                      # opens an empty card-forging prompt
-P                          # use the current draft now
-C                          # store the current draft in cache
-R                          # rewrite the draft with a new prompt
-X                          # discard the current draft
-1-5                        # play cache card
-D then 1-5                 # mount cache card as daemon
-K then 1-5                 # arm cache card as kernel
-I then 1-5                 # inspect cache card
-E                          # end turn
-A                          # ask AI for a suggestion
-G                          # let AI play the current turn
-Q                          # quit
-:                          # open advanced command input
-```
-
-When stdin/stdout is not a TTY, such as tests or shell pipes, the game falls back to line input. Power-user commands are still available there and in `:` command input:
-
-```txt
-help
-status
-compile <prompt>
-play <cacheIndex>
-mount <cacheIndex>
-trap <cacheIndex>
-inspect <cache|daemon|kernel|discard> [index]
-end
-log
-save-log
-restart
-quit
-```
-
-Example:
-
-```txt
-thermal spike
-p
-e
-```
-
-## AI Control
-
-Run a full rule-based AI challenge:
-
-```bash
-node dist/cli.js --auto-player
-```
-
-The AI control plane uses structured player actions and cannot mutate game state directly:
-
-```ts
-{ type: "compile", prompt: "thermal spike" }
-{ type: "play", cacheIndex: 0, cardId: "compiled-thermal-spike" }
-{ type: "end" }
-```
-
-Every action is checked against legal actions before execution.
-
-## LLM Card Compiler
-
-The game defaults to the local stub compiler. To use an OpenAI-compatible LLM for card generation:
-
-```bash
-cp .env.example .env
-# fill LLM_API_KEY and optionally LLM_API_BASE_URL / LLM_MODEL_NAME
-npm run build
-node dist/cli.js --llm --provider openai
-```
-
-Supported env names:
-
-```txt
-LLM_API_BASE_URL=https://your-openai-compatible-host/v1
-LLM_API_KEY=...
-LLM_MODEL_NAME=...
-LLM_API_STYLE=auto
-```
-
-Native OpenAI fallback names also work:
-
-```txt
-OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5.5
-```
-
-`LLM_API_STYLE` can be:
-
-- `auto`: try `/responses`, then fallback to `/chat/completions`
-- `responses`: force `/responses`
-- `chat_completions`: force `/chat/completions`
-
-For agnes-ai or other OpenAI-compatible vendors, start with:
-
-```txt
-LLM_API_BASE_URL=<vendor base url>
-LLM_API_KEY=<vendor key>
-LLM_MODEL_NAME=<vendor model>
-LLM_API_STYLE=chat_completions
-```
-
-Ollama remains planned.
-
-LLM output is still validated locally:
-
-```txt
-OpenAI JSON -> Zod card schema -> balance engine -> draft card
-```
-
-The model can propose a card, but it cannot decide battle results or bypass cost/damage limits.
-While a real LLM request is running, the terminal shows an `AI COMPILER` loading line with elapsed seconds so the game does not look frozen. In an interactive terminal, `cardiverse>` is managed by readline so backspace edits only your input, not the prompt. Common third-party output variants such as `target: "opponent"`, `track: "fire"`, or effect `value` are normalized before Zod validation.
-
-## Environment
-
-Copy `.env.example` to `.env` for future LLM provider support. The real `.env` file is ignored by git.
-
-```bash
-cp .env.example .env
-```
-
-MVP gameplay defaults to the local stub compiler.
+Then open `.terminal-cardiverse/playtests/live/issue.md` and turn the strongest finding into a GitHub issue.

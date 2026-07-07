@@ -185,6 +185,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ae3f5d315924270530207e2a68396c3cc547f6dca3fbdca317cfb1a51edb593"
 
 [[package]]
+name = "cardiverse-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cardiverse-ai",
+ "cardiverse-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "cardiverse-ai"
 version = "0.1.0"
 dependencies = [
@@ -204,6 +217,7 @@ name = "cardiverse-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cardiverse-agent",
  "cardiverse-ai",
  "cardiverse-core",
  "cardiverse-tui",
@@ -231,6 +245,7 @@ name = "cardiverse-tui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cardiverse-agent",
  "cardiverse-ai",
  "cardiverse-core",
  "crossterm 0.28.1",

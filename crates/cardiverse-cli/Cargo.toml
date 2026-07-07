@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+cardiverse-agent = { path = "../cardiverse-agent" }
 cardiverse-ai = { path = "../cardiverse-ai" }
 cardiverse-core = { path = "../cardiverse-core" }
 cardiverse-tui = { path = "../cardiverse-tui" }

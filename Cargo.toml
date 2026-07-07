@@ -2,6 +2,7 @@
 members = [
   "crates/cardiverse-core",
   "crates/cardiverse-ai",
+  "crates/cardiverse-agent",
   "crates/cardiverse-tui",
   "crates/cardiverse-cli",
 ]

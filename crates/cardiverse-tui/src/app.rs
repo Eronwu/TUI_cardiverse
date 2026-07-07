@@ -2,6 +2,10 @@ use std::io::{self, Stdout};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use cardiverse_agent::{
+    build_report, decide, execute_agent_action, observe, AgentPolicy, AgentTraceEntry,
+    PlaytestReport,
+};
 use cardiverse_ai::{compile_card, suggest_turn, CompileMode};
 use cardiverse_core::{
     apply_action, best_effort_action, init_echo, new_game, BattleReplay, GamePhase, GameState,
@@ -19,6 +23,7 @@ use crate::render::render_app;
 
 pub struct RunOptions {
     pub compile_mode: CompileMode,
+    pub observer_policy: Option<AgentPolicy>,
 }
 
 pub struct App {
@@ -30,6 +35,11 @@ pub struct App {
     pub status: String,
     pub ai_suggestion: String,
     pub loading: Option<LoadingState>,
+    pub observer_policy: Option<AgentPolicy>,
+    pub observer_trace: Vec<AgentTraceEntry>,
+    pub observer_failed_actions: usize,
+    pub observer_report: Option<PlaytestReport>,
+    pub next_observer_step_at: Instant,
     pub should_quit: bool,
 }
 
@@ -80,8 +90,22 @@ impl App {
                 .into(),
             ai_suggestion: "Forge a concise exploit or ask AI for a route.".into(),
             loading: None,
+            observer_policy: None,
+            observer_trace: Vec::new(),
+            observer_failed_actions: 0,
+            observer_report: None,
+            next_observer_step_at: Instant::now(),
             should_quit: false,
         }
+    }
+
+    pub fn with_observer(mut self, observer_policy: Option<AgentPolicy>) -> Self {
+        self.observer_policy = observer_policy;
+        if let Some(policy) = observer_policy {
+            self.status = format!("Observer mode active: {policy:?} policy is driving the battle.");
+            self.ai_suggestion = "Observer is ready. Watch the decision reasons here.".into();
+        }
+        self
     }
 }
 
@@ -91,7 +115,7 @@ pub async fn run_tui(options: RunOptions) -> Result<BattleReplay> {
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let mut app = App::new(options.compile_mode);
+    let mut app = App::new(options.compile_mode).with_observer(options.observer_policy);
 
     let result = run_loop(&mut terminal, &mut app).await;
 
@@ -112,6 +136,9 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         if app.should_quit {
             break;
         }
+        if should_run_observer(app) {
+            run_observer_step(app).await;
+        }
         if event::poll(Duration::from_millis(80))? {
             if let Event::Key(key) = event::read()? {
                 handle_key(terminal, app, key).await?;
@@ -119,6 +146,15 @@ async fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut A
         }
     }
     Ok(())
+}
+
+fn should_run_observer(app: &App) -> bool {
+    app.observer_policy.is_some()
+        && app.mode == ScreenMode::Battle
+        && app.state.phase == GamePhase::PlayerTurn
+        && app.state.phase != GamePhase::GameOver
+        && Instant::now() >= app.next_observer_step_at
+        && app.loading.is_none()
 }
 
 async fn handle_key(
@@ -299,6 +335,48 @@ fn run_auto_turn(app: &mut App) {
         }
     }
     app.status = format!("AI auto-turn executed {steps} legal step(s).");
+}
+
+async fn run_observer_step(app: &mut App) {
+    let Some(policy) = app.observer_policy else {
+        return;
+    };
+    let observation = observe(&app.state);
+    let decision = decide(policy, &observation);
+    app.ai_suggestion = format!(
+        "Decision: {:?}\nReason: {}\nExpected: {}\nRisk: {}",
+        decision.action, decision.reason, decision.expected_gain, decision.risk
+    );
+    app.status = format!("Observer executes {:?}", decision.action);
+
+    let result =
+        execute_agent_action(&mut app.state, decision.action.clone(), &app.compile_mode).await;
+    let (events, error) = match result {
+        Ok(events) => (events, None),
+        Err(err) => {
+            app.observer_failed_actions += 1;
+            (Vec::new(), Some(err.to_string()))
+        }
+    };
+    app.observer_trace.push(AgentTraceEntry {
+        step: app.observer_trace.len() as u32 + 1,
+        observation,
+        decision,
+        events,
+        error,
+    });
+
+    if app.state.phase == GamePhase::GameOver {
+        let report = build_report(&app.state, &app.observer_trace, app.observer_failed_actions);
+        app.ai_suggestion = format!(
+            "Final report: winner={:?}, turns={}, forged={}, failed_actions={}.",
+            report.winner, report.turns, report.forged_cards, report.failed_actions
+        );
+        app.status = "Observer battle complete. Q quits and saves replay.".into();
+        app.observer_report = Some(report);
+    }
+
+    app.next_observer_step_at = Instant::now() + Duration::from_millis(850);
 }
 
 fn dispatch(app: &mut App, action: PlayerAction) {

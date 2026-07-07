@@ -110,6 +110,8 @@ The system is split into six layers:
 CLI Args
   ↓
 TUI App
+  ↘
+Agent Playtest / JSONL Protocol
   ↓
 Command Parser
   ↓
@@ -127,7 +129,10 @@ Dependencies must point inward:
 ```txt
 tui -> commands -> compiler -> core
 tui -> storage
+agent -> ai -> core
+agent -> core
 cli -> tui
+cli -> agent
 sim -> core
 ```
 
@@ -152,6 +157,14 @@ TUI may import:
 - AI/compiler public APIs.
 - Replay utilities.
 
+Agent may import:
+
+- Core public APIs.
+- AI/compiler public APIs.
+- Replay/report serialization.
+
+Agent must not drive the TUI through keypress simulation. It uses structured observations and actions.
+
 The TypeScript `src/` tree is now historical prototype code. New gameplay work should happen in `crates/`.
 
 ---
@@ -175,6 +188,9 @@ crates/
     src/compiler.rs
     src/normalizer.rs
     src/suggest.rs
+
+  cardiverse-agent/
+    src/lib.rs
 
   cardiverse-tui/
     src/app.rs
