@@ -20,25 +20,27 @@ npm run dev -- --no-llm
 
 ## Commands
 
-The default input mode is friendly:
+In a real interactive terminal, the game uses single-key controls. You do not need to type commands and press Enter for common actions:
 
 ```txt
-thermal spike              # natural language compiles a draft card
-c thermal spike            # explicit compile shortcut
-p                          # use the current draft now
-c                          # store the current draft in cache
-r recursive doubt          # rewrite the draft with a new prompt
-x                          # discard the current draft
-1                          # play cache card 1
-d2                         # mount cache card 2 as daemon
-k3                         # arm cache card 3 as kernel
-e                          # end turn
-a                          # ask AI for a suggestion
-g                          # let AI play the current turn
-q                          # quit
+type text                  # starts card-forging prompt input
+Enter                      # opens an empty card-forging prompt
+P                          # use the current draft now
+C                          # store the current draft in cache
+R                          # rewrite the draft with a new prompt
+X                          # discard the current draft
+1-5                        # play cache card
+D then 1-5                 # mount cache card as daemon
+K then 1-5                 # arm cache card as kernel
+I then 1-5                 # inspect cache card
+E                          # end turn
+A                          # ask AI for a suggestion
+G                          # let AI play the current turn
+Q                          # quit
+:                          # open advanced command input
 ```
 
-Power-user commands are still available. Prefix with `:` when a phrase should be treated as a system command instead of a card prompt:
+When stdin/stdout is not a TTY, such as tests or shell pipes, the game falls back to line input. Power-user commands are still available there and in `:` command input:
 
 ```txt
 help

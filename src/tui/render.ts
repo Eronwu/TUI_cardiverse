@@ -60,14 +60,14 @@ function renderActions(state: GameState): string {
 
   const draftHint =
     state.draft === undefined
-      ? "type intent or c <intent>"
-      : "draft ready: p=use c=cache r <intent>=rewrite x=discard";
+      ? "forge: type text / Enter"
+      : "draft: P=use C=cache R=rewrite X=discard";
 
   return [
     "ACTIONS",
     `${canCompile ? draftHint : "cache full"} | play: ${playable || "-"} | daemon: ${
       mountable || "-"
-    } | kernel: ${trappable || "-"} | e=end | a=AI suggest | g=AI auto-turn | q=quit | :help`
+    } | kernel: ${trappable || "-"} | E=end | A=AI suggest | G=AI auto-turn | Q=quit | :=command`
   ].join("\n");
 }
 
@@ -103,12 +103,12 @@ function renderMemory(state: GameState): string {
   const cache =
     state.playerMemory.cache.length === 0
       ? "[empty]"
-      : state.playerMemory.cache.map((card, index) => `[${index}] ${card.name}(${card.cost})`).join("  ");
+      : state.playerMemory.cache.map((card, index) => `[${index + 1}] ${card.name}(${card.cost})`).join("  ");
   const daemons =
     state.playerMemory.daemons.length === 0
       ? "[empty] [empty]"
       : state.playerMemory.daemons
-          .map((daemon, index) => `[${index}] ${daemon.card.name}:${daemon.remainingTurns}`)
+          .map((daemon, index) => `[${index + 1}] ${daemon.card.name}:${daemon.remainingTurns}`)
           .join("  ");
   const kernel =
     state.playerMemory.kernel === undefined ? "[empty]" : `[armed] ${state.playerMemory.kernel.card.name}`;
