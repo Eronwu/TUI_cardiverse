@@ -4,6 +4,7 @@ import {
   createChatCompletionsRequestBody,
   createOpenAIRequestBody,
   getLlmCompilerConfig,
+  normalizeCandidateCard,
   requestOpenAICard,
   resolveChatCompletionsUrl,
   resolveResponsesUrl
@@ -311,5 +312,42 @@ describe("llm compiler", () => {
       expect(result.card.backlash).toBeDefined();
       expect(result.warnings).toContain("BALANCE: damage clamped to 30.");
     }
+  });
+
+  it("normalizes common third-party card field variants before Zod validation", () => {
+    expect(
+      normalizeCandidateCard(
+        {
+          id: "angel",
+          kind: "attack",
+          name: "火焰天使",
+          description: "毁灭攻击",
+          target: "opponent",
+          cost: "3",
+          effects: [
+            {
+              type: "attack",
+              track: "fire",
+              value: 18
+            }
+          ],
+          tags: "fire angel"
+        },
+        "创建火焰天使，能力毁灭攻击"
+      )
+    ).toMatchObject({
+      id: "angel",
+      kind: "attack",
+      target: "enemy",
+      cost: 3,
+      effects: [
+        {
+          type: "damage",
+          track: "hp",
+          amount: 18
+        }
+      ],
+      tags: ["fire", "angel"]
+    });
   });
 });

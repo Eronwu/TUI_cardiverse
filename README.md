@@ -132,6 +132,7 @@ OpenAI JSON -> Zod card schema -> balance engine -> draft card
 ```
 
 The model can propose a card, but it cannot decide battle results or bypass cost/damage limits.
+While a real LLM request is running, the terminal shows an `AI COMPILER` loading line with elapsed seconds so the game does not look frozen. In an interactive terminal, `cardiverse>` is managed by readline so backspace edits only your input, not the prompt. Common third-party output variants such as `target: "opponent"`, `track: "fire"`, or effect `value` are normalized before Zod validation.
 
 ## Environment
 

@@ -38,11 +38,8 @@ export async function compilePromptWithLlm(input: CompileInput): Promise<Compile
       ...config,
       prompt
     });
-    const parsed = parseCard({
-      ...candidate,
-      id: candidate.id || `llm-${Date.now()}`,
-      sourcePrompt: prompt
-    });
+    const normalized = normalizeCandidateCard(candidate, prompt);
+    const parsed = parseCard(normalized);
     const { card, warnings } = balanceCard({ card: parsed, prompt });
 
     return {
@@ -54,7 +51,7 @@ export async function compilePromptWithLlm(input: CompileInput): Promise<Compile
     return {
       ok: false,
       code: "CORRUPTED_FILE",
-      message: error instanceof Error ? error.message : "LLM compiler produced invalid output."
+      message: formatCompilerError(error)
     };
   }
 }
@@ -240,8 +237,11 @@ export function createChatCompletionsRequestBody(model: string, prompt: string):
           "Convert the player prompt into one bounded card JSON object.",
           "Return JSON only, no markdown.",
           "Required fields: id, kind, name, description, target, cost, effects, tags.",
-          "Allowed kind: attack, daemon, kernel.",
-          "Allowed effect types: damage, heal, gain_ram, shield.",
+          "Use exact target values only: self or enemy.",
+          "Allowed kind values only: attack, daemon, kernel.",
+          "Allowed effect type values only: damage, heal, gain_ram, shield.",
+          "For damage/heal/shield effects, use exact track values only: hp or sanity.",
+          "Use amount for effect numbers, never value.",
           "Never create instant kill, infinite resources, rule mutation, or immunity."
         ].join(" ")
       },
@@ -253,6 +253,226 @@ export function createChatCompletionsRequestBody(model: string, prompt: string):
     response_format: { type: "json_object" },
     temperature: 0.2
   };
+}
+
+export function normalizeCandidateCard(candidate: unknown, prompt: string): unknown {
+  const raw = isRecord(candidate) ? candidate : {};
+  const effects = normalizeEffects(raw.effects, prompt);
+  const kind = normalizeKind(raw.kind, raw, effects);
+
+  return {
+    id: stringOr(raw.id, `llm-${Date.now()}`),
+    kind,
+    name: stringOr(raw.name, "Compiled Intent"),
+    description: stringOr(raw.description, "A bounded compiled instruction."),
+    target: normalizeTarget(raw.target, kind === "attack" ? "enemy" : "self"),
+    cost: numberOr(raw.cost, 1),
+    effects,
+    tags: normalizeTags(raw.tags),
+    ...(kind === "daemon" ? { duration: numberOr(raw.duration, 2) } : {}),
+    ...(kind === "kernel" ? { trigger: normalizeTrigger(raw.trigger) } : {}),
+    ...(isRecord(raw.backlash) ? { backlash: normalizeBacklash(raw.backlash, prompt) } : {}),
+    sourcePrompt: prompt
+  };
+}
+
+function normalizeEffects(value: unknown, prompt: string): unknown[] {
+  const rawEffects = Array.isArray(value) ? value : isRecord(value) ? [value] : [];
+  const effects = rawEffects.map((effect) => normalizeEffect(effect, prompt)).filter((effect) => effect !== undefined);
+
+  return effects.length > 0 ? effects : [{ type: "damage", track: inferTrackFromPrompt(prompt), amount: 8 }];
+}
+
+function normalizeEffect(effect: unknown, prompt: string): Record<string, unknown> | undefined {
+  if (!isRecord(effect)) {
+    return undefined;
+  }
+
+  const type = normalizeEffectType(effect.type);
+  const amount = numberOr(effect.amount ?? effect.value ?? effect.power ?? effect.damage ?? effect.heal ?? effect.shield, 8);
+  const target = normalizeTarget(effect.target, undefined);
+
+  if (type === "gain_ram") {
+    return {
+      type,
+      amount,
+      ...(target !== undefined ? { target } : {})
+    };
+  }
+
+  const track = normalizeTrack(effect.track ?? effect.attribute ?? effect.stat ?? effect.damageType, inferTrackFromPrompt(prompt));
+
+  return {
+    type,
+    track,
+    amount,
+    ...(target !== undefined ? { target } : {})
+  };
+}
+
+function normalizeKind(value: unknown, raw: Record<string, unknown>, effects: unknown[]): "attack" | "daemon" | "kernel" {
+  const kind = String(value ?? "").toLowerCase();
+  if (kind === "attack" || kind === "daemon" || kind === "kernel") {
+    return kind;
+  }
+
+  if (isRecord(raw.trigger)) {
+    return "kernel";
+  }
+
+  const hasSupportEffect = effects.some((effect) => {
+    if (!isRecord(effect)) {
+      return false;
+    }
+
+    return effect.type === "heal" || effect.type === "shield" || effect.type === "gain_ram";
+  });
+
+  return hasSupportEffect ? "daemon" : "attack";
+}
+
+function normalizeEffectType(value: unknown): "damage" | "heal" | "gain_ram" | "shield" {
+  const type = String(value ?? "").toLowerCase();
+  if (type === "damage" || type === "attack" || type === "harm" || type === "destroy") {
+    return "damage";
+  }
+  if (type === "heal" || type === "repair" || type === "restore") {
+    return "heal";
+  }
+  if (type === "gain_ram" || type === "ram" || type === "resource") {
+    return "gain_ram";
+  }
+  if (type === "shield" || type === "armor" || type === "barrier" || type === "defense") {
+    return "shield";
+  }
+
+  return "damage";
+}
+
+function normalizeTarget(value: unknown, fallback: "self" | "enemy" | undefined): "self" | "enemy" | undefined {
+  const target = String(value ?? "").toLowerCase();
+  if (target === "self" || target === "player" || target === "owner" || target === "me") {
+    return "self";
+  }
+  if (
+    target === "enemy" ||
+    target === "boss" ||
+    target === "opponent" ||
+    target === "target" ||
+    target === "foe"
+  ) {
+    return "enemy";
+  }
+
+  return fallback;
+}
+
+function normalizeTrack(value: unknown, fallback: "hp" | "sanity"): "hp" | "sanity" {
+  const track = String(value ?? "").toLowerCase();
+  if (
+    track === "hp" ||
+    track === "health" ||
+    track === "life" ||
+    track === "body" ||
+    track === "physical" ||
+    track === "fire" ||
+    track === "thermal"
+  ) {
+    return "hp";
+  }
+  if (
+    track === "sanity" ||
+    track === "mind" ||
+    track === "logic" ||
+    track === "mental" ||
+    track === "paradox"
+  ) {
+    return "sanity";
+  }
+
+  return fallback;
+}
+
+function inferTrackFromPrompt(prompt: string): "hp" | "sanity" {
+  const lower = prompt.toLowerCase();
+  return lower.includes("sanity") ||
+    lower.includes("logic") ||
+    lower.includes("paradox") ||
+    lower.includes("心智") ||
+    lower.includes("逻辑") ||
+    lower.includes("悖论")
+    ? "sanity"
+    : "hp";
+}
+
+function normalizeTags(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((tag) => String(tag).trim()).filter((tag) => tag.length > 0);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/[,，\s]+/)
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+  }
+
+  return ["llm"];
+}
+
+function normalizeTrigger(value: unknown): Record<string, unknown> {
+  if (isRecord(value)) {
+    return {
+      when: stringOr(value.when, "self_takes_hp_damage"),
+      limit: numberOr(value.limit, 1)
+    };
+  }
+
+  return {
+    when: "self_takes_hp_damage",
+    limit: 1
+  };
+}
+
+function normalizeBacklash(value: Record<string, unknown>, prompt: string): Record<string, unknown> {
+  return {
+    reason: stringOr(value.reason, "LLM requested high-risk effect."),
+    effects: normalizeEffects(value.effects, prompt)
+  };
+}
+
+function stringOr(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(1, Math.round(value));
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return Math.max(1, Math.round(parsed));
+    }
+  }
+
+  return fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatCompilerError(error: unknown): string {
+  if (isRecord(error) && Array.isArray(error.issues)) {
+    const paths = error.issues
+      .map((issue) => (isRecord(issue) && Array.isArray(issue.path) ? issue.path.join(".") : "unknown"))
+      .join(", ");
+    return `Schema validation failed at: ${paths}`;
+  }
+
+  return error instanceof Error ? error.message : "LLM compiler produced invalid output.";
 }
 
 type OpenAIResponsePayload = {
