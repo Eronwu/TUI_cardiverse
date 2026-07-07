@@ -15,7 +15,7 @@ export function createProgram(): Command {
     .option("--llm", "enable the configured LLM compiler", false)
     .option("--no-llm", "force the local stub compiler")
     .option("--auto-player", "let the rule-based AI play the challenge")
-    .option("--provider <provider>", "set LLM provider: ollama or openai")
+    .option("--provider <provider>", "set LLM provider: openai (ollama planned)")
     .option("--debug", "enable debug output", false);
 }
 

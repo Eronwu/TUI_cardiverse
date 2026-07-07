@@ -86,6 +86,10 @@ function parseQuickCommand(trimmed: string): ParsedCommand | undefined {
     return { type: "compile", prompt: trimmed.slice(1).trimStart() };
   }
 
+  if (/^r\s+/.test(lower)) {
+    return { type: "compile", prompt: trimmed.slice(1).trimStart() };
+  }
+
   if (/^[1-5]$/.test(lower)) {
     return { type: "play", cacheIndex: Number.parseInt(lower, 10) - 1 };
   }
@@ -104,7 +108,11 @@ function parseQuickCommand(trimmed: string): ParsedCommand | undefined {
 
   switch (lower) {
     case "c":
-      return { type: "compile", prompt: "" };
+      return { type: "cache_draft" };
+    case "p":
+      return { type: "use_draft" };
+    case "x":
+      return { type: "discard_draft" };
     case "e":
       return { type: "end" };
     case "a":

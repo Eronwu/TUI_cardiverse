@@ -5,6 +5,9 @@ export type ParsedCommand =
   | { type: "new" }
   | { type: "status" }
   | { type: "compile"; prompt: string }
+  | { type: "use_draft" }
+  | { type: "cache_draft" }
+  | { type: "discard_draft" }
   | { type: "play"; cacheIndex: number }
   | { type: "mount"; cacheIndex: number }
   | { type: "trap"; cacheIndex: number }

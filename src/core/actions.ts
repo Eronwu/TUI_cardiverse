@@ -22,6 +22,56 @@ export function addCardToCache(state: GameState, actor: ActorId, card: Card): Ga
   });
 }
 
+export function setDraftCard(state: GameState, card: Card): GameState {
+  return {
+    ...state,
+    draft: card
+  };
+}
+
+export function clearDraftCard(state: GameState): GameState {
+  const { draft: _draft, ...stateWithoutDraft } = state;
+  return stateWithoutDraft;
+}
+
+export function cacheDraftCard(state: GameState): GameState {
+  if (state.draft === undefined) {
+    return appendLog(state, {
+      type: "system",
+      message: "DRAFT: no compiled card pending."
+    });
+  }
+
+  const draft = state.draft;
+  return addCardToCache(clearDraftCard(state), "player", draft);
+}
+
+export function useDraftCard(state: GameState): GameState {
+  if (state.draft === undefined) {
+    return appendLog(state, {
+      type: "system",
+      message: "DRAFT: no compiled card pending."
+    });
+  }
+
+  const draft = state.draft;
+  const withCache = addCardToCache(clearDraftCard(state), "player", draft);
+  const cacheIndex = withCache.playerMemory.cache.findIndex((card) => card.id === draft.id);
+  if (cacheIndex < 0) {
+    return withCache;
+  }
+
+  if (draft.kind === "attack") {
+    return playCard(withCache, "player", cacheIndex);
+  }
+
+  if (draft.kind === "daemon") {
+    return mountDaemon(withCache, "player", cacheIndex);
+  }
+
+  return armKernel(withCache, "player", cacheIndex);
+}
+
 export function playCard(state: GameState, actor: ActorId, cacheIndex: number): GameState {
   const card = getCacheCard(state, actor, cacheIndex);
 

@@ -3,21 +3,13 @@ import { balanceCard } from "./balance.js";
 import { parseCard } from "./schema.js";
 import type { CompileInput, CompileResult } from "./types.js";
 
-export async function compilePrompt(input: CompileInput): Promise<CompileResult> {
+export async function compilePromptWithStub(input: CompileInput): Promise<CompileResult> {
   const prompt = input.prompt.trim();
   if (prompt.length === 0) {
     return {
       ok: false,
       code: "EMPTY_PROMPT",
       message: "Prompt is empty."
-    };
-  }
-
-  if (input.mode === "llm") {
-    return {
-      ok: false,
-      code: "COMPILER_UNAVAILABLE",
-      message: "LLM compiler is not implemented yet. Use --no-llm for MVP stub mode."
     };
   }
 

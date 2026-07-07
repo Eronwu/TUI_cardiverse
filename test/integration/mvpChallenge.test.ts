@@ -25,7 +25,7 @@ describe("MVP challenge", () => {
         type: "compile",
         prompt: "summon a black hole to destroy everything"
       });
-      state = await runCommand(state, { type: "play", cacheIndex: 0 });
+      state = await runCommand(state, { type: "use_draft" });
 
       if (state.phase !== "game_over") {
         state = await runCommand(state, { type: "end" });

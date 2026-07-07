@@ -10,6 +10,11 @@ export async function main(argv = process.argv): Promise<void> {
   program.action(async () => {
     const options = parseCliOptions(program.opts());
     const compilerMode = options.llm ? "llm" : "stub";
+    if (options.llm && options.provider !== undefined && options.provider !== "openai") {
+      console.error(`cardiverse: provider "${options.provider}" is not implemented yet. Use --provider openai.`);
+      process.exitCode = 1;
+      return;
+    }
     if (options.autoPlayer) {
       await printAutoPlayerChallenge({ compilerMode, output: process.stdout });
       return;

@@ -59,7 +59,7 @@ describe("player action control plane", () => {
 
     expect(getLegalActions(state)).toEqual(
       expect.arrayContaining([
-        { type: "compile", reason: "cache has free slot" },
+        { type: "compile", reason: "create a draft card" },
         { type: "play", cacheIndex: 0, cardId: "attack-card", cardName: "Attack Card", reason: "affordable attack" },
         {
           type: "mount",

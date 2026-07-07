@@ -9,6 +9,8 @@ export function renderBattle(state: GameState, boss: BossDefinition): string {
     "",
     renderMemory(state),
     "",
+    renderDraft(state),
+    "",
     renderActions(state),
     "",
     renderBoss(boss),
@@ -16,6 +18,23 @@ export function renderBattle(state: GameState, boss: BossDefinition): string {
     "SYSTEM LOG",
     ...state.logs.slice(-10).map(renderLogEvent),
     "====================================================="
+  ].join("\n");
+}
+
+function renderDraft(state: GameState): string {
+  if (state.draft === undefined) {
+    return "DRAFT\n[empty]";
+  }
+
+  const effects = state.draft.effects.map(effectToText).join("; ");
+  const tags = state.draft.tags.join(", ");
+
+  return [
+    "DRAFT CARD",
+    `${state.draft.name} / ${state.draft.kind} / cost ${state.draft.cost} RAM`,
+    effects,
+    `tags: ${tags}`,
+    `[p] use now  [c] cache  [r <prompt>] rewrite  [x] discard`
   ].join("\n");
 }
 
@@ -39,9 +58,14 @@ function renderActions(state: GameState): string {
     .map((action) => `k${action.cacheIndex + 1}`)
     .join(",");
 
+  const draftHint =
+    state.draft === undefined
+      ? "type intent or c <intent>"
+      : "draft ready: p=use c=cache r <intent>=rewrite x=discard";
+
   return [
     "ACTIONS",
-    `${canCompile ? "type intent or c <intent>" : "cache full"} | play: ${playable || "-"} | daemon: ${
+    `${canCompile ? draftHint : "cache full"} | play: ${playable || "-"} | daemon: ${
       mountable || "-"
     } | kernel: ${trappable || "-"} | e=end | a=AI suggest | g=AI auto-turn | q=quit | :help`
   ].join("\n");

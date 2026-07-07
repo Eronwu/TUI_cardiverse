@@ -1,12 +1,15 @@
-import { addCardToCache, armKernel, mountDaemon, playCard } from "../core/actions.js";
+import { armKernel, cacheDraftCard, clearDraftCard, mountDaemon, playCard, setDraftCard, useDraftCard } from "../core/actions.js";
 import { appendLog } from "../core/log.js";
 import { endPlayerTurn } from "../core/turn.js";
 import type { BossDefinition, Card, GameState } from "../core/types.js";
-import { compilePrompt } from "../compiler/stubCompiler.js";
+import { compilePrompt } from "../compiler/index.js";
 import type { CompilerMode } from "../compiler/types.js";
 
 export type PlayerAction =
   | { type: "compile"; prompt: string }
+  | { type: "use_draft" }
+  | { type: "cache_draft" }
+  | { type: "discard_draft" }
   | { type: "play"; cacheIndex: number; cardId?: string }
   | { type: "mount"; cacheIndex: number; cardId?: string }
   | { type: "trap"; cacheIndex: number; cardId?: string }
@@ -14,6 +17,9 @@ export type PlayerAction =
 
 export type LegalAction =
   | { type: "compile"; reason: string }
+  | { type: "use_draft"; cardName: string; reason: string }
+  | { type: "cache_draft"; cardName: string; reason: string }
+  | { type: "discard_draft"; cardName: string; reason: string }
   | { type: "play"; cacheIndex: number; cardId: string; cardName: string; reason: string }
   | { type: "mount"; cacheIndex: number; cardId: string; cardName: string; reason: string }
   | { type: "trap"; cacheIndex: number; cardId: string; cardName: string; reason: string }
@@ -41,7 +47,13 @@ export async function dispatchPlayerAction(input: DispatchPlayerActionInput): Pr
 
   switch (input.action.type) {
     case "compile":
-      return compileIntoCache(input.state, input.action.prompt, input.compilerMode);
+      return compileIntoDraft(input.state, input.action.prompt, input.compilerMode);
+    case "use_draft":
+      return useDraftCard(input.state);
+    case "cache_draft":
+      return cacheDraftCard(input.state);
+    case "discard_draft":
+      return appendSystem(clearDraftCard(input.state), "DRAFT: discarded.");
     case "play":
       return playCard(input.state, "player", input.action.cacheIndex);
     case "mount":
@@ -60,8 +72,18 @@ export function getLegalActions(state: GameState): LegalAction[] {
 
   const actions: LegalAction[] = [];
 
-  if (state.playerMemory.cache.length < 5) {
-    actions.push({ type: "compile", reason: "cache has free slot" });
+  actions.push({ type: "compile", reason: state.draft === undefined ? "create a draft card" : "rewrite current draft" });
+
+  if (state.draft !== undefined) {
+    actions.push({
+      type: "use_draft",
+      cardName: state.draft.name,
+      reason: state.draft.kind === "attack" ? "play draft now" : `install draft ${state.draft.kind}`
+    });
+    if (state.playerMemory.cache.length < 5) {
+      actions.push({ type: "cache_draft", cardName: state.draft.name, reason: "store draft in cache" });
+    }
+    actions.push({ type: "discard_draft", cardName: state.draft.name, reason: "discard current draft" });
   }
 
   state.playerMemory.cache.forEach((card, index) => {
@@ -106,7 +128,13 @@ export function isLegalPlayerAction(state: GameState, action: PlayerAction): boo
 
   switch (action.type) {
     case "compile":
-      return action.prompt.trim().length > 0 && state.playerMemory.cache.length < 5;
+      return action.prompt.trim().length > 0;
+    case "use_draft":
+      return canUseDraft(state);
+    case "cache_draft":
+      return state.draft !== undefined && state.playerMemory.cache.length < 5;
+    case "discard_draft":
+      return state.draft !== undefined;
     case "play":
       return canUseCacheCard(state, action.cacheIndex, "attack", action.cardId);
     case "mount":
@@ -116,6 +144,23 @@ export function isLegalPlayerAction(state: GameState, action: PlayerAction): boo
     case "end":
       return true;
   }
+}
+
+function canUseDraft(state: GameState): boolean {
+  const draft = state.draft;
+  if (draft === undefined || draft.cost > state.player.ram) {
+    return false;
+  }
+
+  if (draft.kind === "daemon") {
+    return state.playerMemory.daemons.length < 2 && state.playerMemory.cache.length < 5;
+  }
+
+  if (draft.kind === "kernel") {
+    return state.playerMemory.kernel === undefined && state.playerMemory.cache.length < 5;
+  }
+
+  return state.playerMemory.cache.length < 5;
 }
 
 function canUseCacheCard(state: GameState, cacheIndex: number, kind: Card["kind"], cardId?: string): boolean {
@@ -128,7 +173,7 @@ function canUseCacheCard(state: GameState, cacheIndex: number, kind: Card["kind"
   );
 }
 
-async function compileIntoCache(state: GameState, prompt: string, compilerMode: CompilerMode): Promise<GameState> {
+async function compileIntoDraft(state: GameState, prompt: string, compilerMode: CompilerMode): Promise<GameState> {
   const result = await compilePrompt({
     prompt,
     actor: "player",
@@ -156,7 +201,7 @@ async function compileIntoCache(state: GameState, prompt: string, compilerMode: 
   });
   const warningState = result.warnings.reduce((nextState, warning) => appendSystem(nextState, warning), loggedState);
 
-  return addCardToCache(warningState, "player", result.card);
+  return setDraftCard(warningState, result.card);
 }
 
 function appendSystem(state: GameState, message: string): GameState {

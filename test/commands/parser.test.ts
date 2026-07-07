@@ -44,6 +44,10 @@ describe("parseCommand", () => {
     expect(parseCommand("g")).toEqual({ type: "auto_turn" });
     expect(parseCommand("q")).toEqual({ type: "quit" });
     expect(parseCommand("?")).toEqual({ type: "help" });
+    expect(parseCommand("p")).toEqual({ type: "use_draft" });
+    expect(parseCommand("c")).toEqual({ type: "cache_draft" });
+    expect(parseCommand("x")).toEqual({ type: "discard_draft" });
+    expect(parseCommand("r recursive doubt")).toEqual({ type: "compile", prompt: "recursive doubt" });
   });
 
   it("returns unknown for invalid commands or indexes", () => {

@@ -4,7 +4,7 @@ import { initEcho } from "../../src/content/bosses/initEcho.js";
 import { createGameState } from "../../src/core/state.js";
 
 describe("handleCommand", () => {
-  it("compiles prompt into player cache", async () => {
+  it("compiles prompt into a draft card", async () => {
     const result = await handleCommand({
       command: { type: "compile", prompt: "thermal spike" },
       state: createGameState(initEcho),
@@ -12,8 +12,8 @@ describe("handleCommand", () => {
       compilerMode: "stub"
     });
 
-    expect(result.state.playerMemory.cache).toHaveLength(1);
-    expect(result.state.playerMemory.cache[0]?.name).toBe("Thermal Spike");
+    expect(result.state.draft?.name).toBe("Thermal Spike");
+    expect(result.state.playerMemory.cache).toHaveLength(0);
     expect(result.state.logs.some((log) => log.type === "compile" && log.success)).toBe(true);
   });
 
@@ -28,7 +28,7 @@ describe("handleCommand", () => {
       compilerMode: "stub"
     });
     const played = await handleCommand({
-      command: { type: "play", cacheIndex: 0 },
+      command: { type: "use_draft" },
       state: compiled.state,
       boss: initEcho,
       compilerMode: "stub"
@@ -36,6 +36,40 @@ describe("handleCommand", () => {
 
     expect(played.state.boss.hp).toBe(104);
     expect(played.state.playerMemory.discard[0]?.name).toBe("Thermal Spike");
+  });
+
+  it("can cache and discard draft cards", async () => {
+    const compiled = await handleCommand({
+      command: { type: "compile", prompt: "thermal spike" },
+      state: createGameState(initEcho),
+      boss: initEcho,
+      compilerMode: "stub"
+    });
+    const cached = await handleCommand({
+      command: { type: "cache_draft" },
+      state: compiled.state,
+      boss: initEcho,
+      compilerMode: "stub"
+    });
+
+    expect(cached.state.draft).toBeUndefined();
+    expect(cached.state.playerMemory.cache[0]?.name).toBe("Thermal Spike");
+
+    const recompiled = await handleCommand({
+      command: { type: "compile", prompt: "recursive doubt" },
+      state: cached.state,
+      boss: initEcho,
+      compilerMode: "stub"
+    });
+    const discarded = await handleCommand({
+      command: { type: "discard_draft" },
+      state: recompiled.state,
+      boss: initEcho,
+      compilerMode: "stub"
+    });
+
+    expect(discarded.state.draft).toBeUndefined();
+    expect(discarded.state.playerMemory.cache).toHaveLength(1);
   });
 
   it("ends turn and lets boss act", async () => {

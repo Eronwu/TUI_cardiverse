@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compilePrompt } from "../../src/compiler/stubCompiler.js";
+import { compilePrompt } from "../../src/compiler/index.js";
 
 describe("compilePrompt stub mode", () => {
   it("compiles thermal prompts into hp attacks", async () => {
@@ -122,7 +122,9 @@ describe("compilePrompt stub mode", () => {
     }
   });
 
-  it("returns unavailable for llm mode until provider is implemented", async () => {
+  it("returns unavailable for llm mode when no key is configured", async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     const result = await compilePrompt({
       prompt: "thermal spike",
       actor: "player",
@@ -134,5 +136,9 @@ describe("compilePrompt stub mode", () => {
       ok: false,
       code: "COMPILER_UNAVAILABLE"
     });
+
+    if (originalKey !== undefined) {
+      process.env.OPENAI_API_KEY = originalKey;
+    }
   });
 });

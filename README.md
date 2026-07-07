@@ -23,8 +23,12 @@ npm run dev -- --no-llm
 The default input mode is friendly:
 
 ```txt
-thermal spike              # natural language is compiled directly
+thermal spike              # natural language compiles a draft card
 c thermal spike            # explicit compile shortcut
+p                          # use the current draft now
+c                          # store the current draft in cache
+r recursive doubt          # rewrite the draft with a new prompt
+x                          # discard the current draft
 1                          # play cache card 1
 d2                         # mount cache card 2 as daemon
 k3                         # arm cache card 3 as kernel
@@ -55,7 +59,7 @@ Example:
 
 ```txt
 thermal spike
-1
+p
 e
 ```
 
@@ -76,6 +80,27 @@ The AI control plane uses structured player actions and cannot mutate game state
 ```
 
 Every action is checked against legal actions before execution.
+
+## LLM Card Compiler
+
+The game defaults to the local stub compiler. To use OpenAI for card generation:
+
+```bash
+cp .env.example .env
+# fill OPENAI_API_KEY
+npm run build
+node dist/cli.js --llm --provider openai
+```
+
+Only the OpenAI provider is implemented right now. Ollama remains planned.
+
+LLM output is still validated locally:
+
+```txt
+OpenAI JSON -> Zod card schema -> balance engine -> draft card
+```
+
+The model can propose a card, but it cannot decide battle results or bypass cost/damage limits.
 
 ## Environment
 

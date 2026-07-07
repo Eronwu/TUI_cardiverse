@@ -10,6 +10,14 @@ export type AiSuggestion = {
 export function suggestPlayerAction(state: GameState): AiSuggestion {
   const legalActions = getLegalActions(state);
 
+  const usableDraft = legalActions.find((action) => action.type === "use_draft");
+  if (usableDraft !== undefined) {
+    return {
+      action: { type: "use_draft" },
+      reason: `Use draft ${usableDraft.cardName}; it is ready now.`
+    };
+  }
+
   const playableAttack = legalActions.find((action) => action.type === "play");
   if (playableAttack !== undefined) {
     return {

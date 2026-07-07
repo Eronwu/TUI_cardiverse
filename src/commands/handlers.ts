@@ -44,6 +44,33 @@ export async function handleCommand(input: HandleCommandInput): Promise<HandleCo
           action: { type: "compile", prompt: command.prompt }
         })
       };
+    case "use_draft":
+      return {
+        state: await dispatchPlayerAction({
+          state: input.state,
+          boss,
+          compilerMode,
+          action: { type: "use_draft" }
+        })
+      };
+    case "cache_draft":
+      return {
+        state: await dispatchPlayerAction({
+          state: input.state,
+          boss,
+          compilerMode,
+          action: { type: "cache_draft" }
+        })
+      };
+    case "discard_draft":
+      return {
+        state: await dispatchPlayerAction({
+          state: input.state,
+          boss,
+          compilerMode,
+          action: { type: "discard_draft" }
+        })
+      };
     case "play":
       return {
         state: await dispatchPlayerAction({
@@ -170,6 +197,12 @@ function formatAction(action: ReturnType<typeof suggestPlayerAction>["action"]):
   switch (action.type) {
     case "compile":
       return `compile "${action.prompt}"`;
+    case "use_draft":
+      return "use draft";
+    case "cache_draft":
+      return "cache draft";
+    case "discard_draft":
+      return "discard draft";
     case "play":
       return `play ${action.cacheIndex + 1}`;
     case "mount":

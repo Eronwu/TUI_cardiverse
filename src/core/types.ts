@@ -144,6 +144,7 @@ export type GameState = {
   bossMemory: MemoryState;
   bossId: string;
   logs: BattleLogEvent[];
+  draft?: Card;
   winner?: ActorId;
   defeatReason?: string;
 };

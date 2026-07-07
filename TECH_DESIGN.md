@@ -717,6 +717,8 @@ The terminal should not require players to memorize command syntax.
 Default input behavior:
 
 - Plain natural language is treated as a compile prompt.
+- Compile produces a `draft` card, not an immediate cache insert.
+- Draft controls: `p` use now, `c` cache, `r <prompt>` rewrite, `x` discard.
 - `1-5` plays cache cards.
 - `d1-d5` mounts daemon cards.
 - `k1-k5` arms kernel cards.
@@ -727,6 +729,12 @@ Default input behavior:
 - `:` prefixes power-user commands, such as `:log` or `:save-log`.
 
 AI control is handled through structured `PlayerAction` values. AI cannot directly mutate `GameState`; actions are validated and dispatched through the same path used by human commands.
+
+LLM card compilation uses:
+
+```txt
+OpenAI Responses API -> JSON Schema output -> Zod runtime validation -> balance engine -> draft card
+```
 
 ### 10.1 Command Type
 
@@ -1059,10 +1067,10 @@ The first playable build is done when:
 - User can run:
 
 ```txt
-compile thermal spike
-play 0
-end
-status
+thermal spike
+p
+e
+:status
 ```
 
 - INIT ECHO can damage the player.
