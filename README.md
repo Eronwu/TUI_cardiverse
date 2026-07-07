@@ -83,16 +83,47 @@ Every action is checked against legal actions before execution.
 
 ## LLM Card Compiler
 
-The game defaults to the local stub compiler. To use OpenAI for card generation:
+The game defaults to the local stub compiler. To use an OpenAI-compatible LLM for card generation:
 
 ```bash
 cp .env.example .env
-# fill OPENAI_API_KEY
+# fill LLM_API_KEY and optionally LLM_API_BASE_URL / LLM_MODEL_NAME
 npm run build
 node dist/cli.js --llm --provider openai
 ```
 
-Only the OpenAI provider is implemented right now. Ollama remains planned.
+Supported env names:
+
+```txt
+LLM_API_BASE_URL=https://your-openai-compatible-host/v1
+LLM_API_KEY=...
+LLM_MODEL_NAME=...
+LLM_API_STYLE=auto
+```
+
+Native OpenAI fallback names also work:
+
+```txt
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-5.5
+```
+
+`LLM_API_STYLE` can be:
+
+- `auto`: try `/responses`, then fallback to `/chat/completions`
+- `responses`: force `/responses`
+- `chat_completions`: force `/chat/completions`
+
+For agnes-ai or other OpenAI-compatible vendors, start with:
+
+```txt
+LLM_API_BASE_URL=<vendor base url>
+LLM_API_KEY=<vendor key>
+LLM_MODEL_NAME=<vendor model>
+LLM_API_STYLE=chat_completions
+```
+
+Ollama remains planned.
 
 LLM output is still validated locally:
 

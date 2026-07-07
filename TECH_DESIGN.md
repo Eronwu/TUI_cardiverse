@@ -736,6 +736,22 @@ LLM card compilation uses:
 OpenAI Responses API -> JSON Schema output -> Zod runtime validation -> balance engine -> draft card
 ```
 
+Provider environment variable priority:
+
+```txt
+LLM_API_BASE_URL / LLM_API_KEY / LLM_MODEL_NAME
+  fallback to
+OPENAI_API_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL
+```
+
+Third-party providers such as agnes-ai can use either an OpenAI-compatible `/responses` endpoint or a `/chat/completions` endpoint.
+
+`LLM_API_STYLE` controls endpoint selection:
+
+- `auto`: try `/responses`, fallback to `/chat/completions`.
+- `responses`: force `/responses`.
+- `chat_completions`: force `/chat/completions`.
+
 ### 10.1 Command Type
 
 ```ts
