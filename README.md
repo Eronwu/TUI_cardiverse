@@ -2,7 +2,7 @@
 
 Terminal Cardiverse is a terminal-native prompt-compiled card strategy game.
 
-The original TypeScript prototype remains in this repo as the rule reference. The next-generation playable is now a Rust + Ratatui terminal cockpit: full-screen battle UI, AI card drafting, keyboard-first controls, and deterministic replay files.
+The original TypeScript prototype remains in this repo as the rule reference. The next-generation playable is now a Rust + Ratatui terminal battle stage: Boss-forward screen composition, AI card drafting, keyboard-first controls, and deterministic replay files.
 
 It does not require a real LLM key; the local stub compiler is enough to challenge the first Boss, `INIT ECHO`.
 
@@ -30,7 +30,9 @@ cardiverse replay <file>     # print a deterministic replay
 cardiverse doctor            # check terminal and LLM env
 ```
 
-The Rust cockpit controls are:
+The Rust UI v2 cockpit is organized as a battle stage: Boss matrix on top, active draft/selected card in the center, cache track at the bottom, and subtitle-style battle log on the side.
+
+Controls:
 
 ```txt
 F            forge an AI/stub draft card
