@@ -5,14 +5,16 @@ describe("parseCliOptions", () => {
   it("defaults to stub mode with debug disabled", () => {
     expect(parseCliOptions({})).toEqual({
       llm: false,
-      debug: false
+      debug: false,
+      autoPlayer: false
     });
   });
 
   it("supports forcing the local stub compiler", () => {
     expect(parseCliOptions({ llm: false })).toEqual({
       llm: false,
-      debug: false
+      debug: false,
+      autoPlayer: false
     });
   });
 
@@ -20,7 +22,16 @@ describe("parseCliOptions", () => {
     expect(parseCliOptions({ provider: "ollama", debug: true })).toEqual({
       llm: false,
       debug: true,
+      autoPlayer: false,
       provider: "ollama"
+    });
+  });
+
+  it("supports auto-player mode", () => {
+    expect(parseCliOptions({ autoPlayer: true })).toEqual({
+      llm: false,
+      debug: false,
+      autoPlayer: true
     });
   });
 

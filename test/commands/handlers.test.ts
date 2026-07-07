@@ -64,4 +64,33 @@ describe("handleCommand", () => {
     expect(result.state.turn).toBe(1);
     expect(result.state.boss.hp).toBe(120);
   });
+
+  it("shows an AI suggestion without changing battle state", async () => {
+    const state = createGameState(initEcho);
+    const result = await handleCommand({
+      command: { type: "suggest" },
+      state,
+      boss: initEcho,
+      compilerMode: "stub"
+    });
+
+    expect(result.state.player).toEqual(state.player);
+    expect(result.state.boss).toEqual(state.boss);
+    expect(result.state.logs.at(-1)).toMatchObject({
+      type: "system",
+      message: expect.stringContaining("AI SUGGEST:")
+    });
+  });
+
+  it("runs an AI controlled turn", async () => {
+    const result = await handleCommand({
+      command: { type: "auto_turn" },
+      state: createGameState(initEcho),
+      boss: initEcho,
+      compilerMode: "stub"
+    });
+
+    expect(result.state.turn).toBeGreaterThanOrEqual(2);
+    expect(result.state.logs.some((log) => log.type === "compile" && log.success)).toBe(true);
+  });
 });

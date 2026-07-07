@@ -10,6 +10,8 @@ export type ParsedCommand =
   | { type: "trap"; cacheIndex: number }
   | { type: "inspect"; zone: InspectZone; index?: number }
   | { type: "end" }
+  | { type: "suggest" }
+  | { type: "auto_turn" }
   | { type: "log" }
   | { type: "save_log" }
   | { type: "settings" }

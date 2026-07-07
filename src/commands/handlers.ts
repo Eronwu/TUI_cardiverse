@@ -1,10 +1,10 @@
-import { addCardToCache, armKernel, mountDaemon, playCard } from "../core/actions.js";
 import { appendLog } from "../core/log.js";
 import { createGameState } from "../core/state.js";
-import { endPlayerTurn, startTurn } from "../core/turn.js";
+import { startTurn } from "../core/turn.js";
 import type { BossDefinition, GameState } from "../core/types.js";
-import { compilePrompt } from "../compiler/stubCompiler.js";
 import type { CompilerMode } from "../compiler/types.js";
+import { runAutoTurn, suggestPlayerAction } from "../control/aiPlayer.js";
+import { dispatchPlayerAction } from "../control/playerActions.js";
 import { saveBattleLog } from "../storage/battleLog.js";
 import type { InspectZone, ParsedCommand } from "./types.js";
 
@@ -33,17 +33,69 @@ export async function handleCommand(input: HandleCommandInput): Promise<HandleCo
     case "status":
       return { state: appendSystem(input.state, "STATUS: refreshed.") };
     case "compile":
-      return handleCompile(input.state, command.prompt, compilerMode);
+      if (command.prompt.trim().length === 0) {
+        return { state: appendSystem(input.state, "COMPILE: type an intent directly, for example: thermal spike.") };
+      }
+      return {
+        state: await dispatchPlayerAction({
+          state: input.state,
+          boss,
+          compilerMode,
+          action: { type: "compile", prompt: command.prompt }
+        })
+      };
     case "play":
-      return { state: playCard(input.state, "player", command.cacheIndex) };
+      return {
+        state: await dispatchPlayerAction({
+          state: input.state,
+          boss,
+          compilerMode,
+          action: { type: "play", cacheIndex: command.cacheIndex }
+        })
+      };
     case "mount":
-      return { state: mountDaemon(input.state, "player", command.cacheIndex) };
+      return {
+        state: await dispatchPlayerAction({
+          state: input.state,
+          boss,
+          compilerMode,
+          action: { type: "mount", cacheIndex: command.cacheIndex }
+        })
+      };
     case "trap":
-      return { state: armKernel(input.state, "player", command.cacheIndex) };
+      return {
+        state: await dispatchPlayerAction({
+          state: input.state,
+          boss,
+          compilerMode,
+          action: { type: "trap", cacheIndex: command.cacheIndex }
+        })
+      };
     case "inspect":
       return { state: appendSystem(input.state, inspectText(input.state, command.zone, command.index)) };
     case "end":
-      return { state: endPlayerTurn(input.state, boss) };
+      return {
+        state: await dispatchPlayerAction({
+          state: input.state,
+          boss,
+          compilerMode,
+          action: { type: "end" }
+        })
+      };
+    case "suggest": {
+      const suggestion = suggestPlayerAction(input.state);
+      return {
+        state: appendSystem(input.state, `AI SUGGEST: ${formatAction(suggestion.action)}. ${suggestion.reason}`)
+      };
+    }
+    case "auto_turn":
+      return {
+        state: await runAutoTurn({
+          state: input.state,
+          boss,
+          compilerMode
+        })
+      };
     case "log":
       return { state: input.state, showLog: true };
     case "save_log":
@@ -55,45 +107,6 @@ export async function handleCommand(input: HandleCommandInput): Promise<HandleCo
     case "unknown":
       return { state: appendSystem(input.state, `ERROR: unknown command "${command.raw.trim()}".`) };
   }
-}
-
-async function handleCompile(
-  state: GameState,
-  prompt: string,
-  compilerMode: CompilerMode
-): Promise<HandleCommandResult> {
-  const result = await compilePrompt({
-    prompt,
-    actor: "player",
-    turn: state.turn,
-    mode: compilerMode
-  });
-
-  if (!result.ok) {
-    return {
-      state: appendLog(state, {
-        type: "compile",
-        actor: "player",
-        prompt,
-        success: false,
-        message: `${result.code}: ${result.message}`
-      })
-    };
-  }
-
-  const loggedState = appendLog(state, {
-    type: "compile",
-    actor: "player",
-    prompt,
-    cardName: result.card.name,
-    success: true,
-    message: `COMPILED: ${result.card.name} / cost ${result.card.cost}.`
-  });
-  const warningState = result.warnings.reduce((nextState, warning) => appendSystem(nextState, warning), loggedState);
-
-  return {
-    state: addCardToCache(warningState, "player", result.card)
-  };
 }
 
 async function handleSaveLog(state: GameState, boss: BossDefinition): Promise<HandleCommandResult> {
@@ -144,9 +157,26 @@ function helpText(): string {
     "trap <cacheIndex>",
     "inspect <cache|daemon|kernel|discard> [index]",
     "end",
+    "a / suggest",
+    "g / auto-turn",
     "log",
     "save-log",
     "restart",
     "quit"
   ].join(" | ");
+}
+
+function formatAction(action: ReturnType<typeof suggestPlayerAction>["action"]): string {
+  switch (action.type) {
+    case "compile":
+      return `compile "${action.prompt}"`;
+    case "play":
+      return `play ${action.cacheIndex + 1}`;
+    case "mount":
+      return `mount ${action.cacheIndex + 1}`;
+    case "trap":
+      return `trap ${action.cacheIndex + 1}`;
+    case "end":
+      return "end";
+  }
 }

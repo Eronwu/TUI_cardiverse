@@ -1,5 +1,6 @@
 import type { BattleLogEvent, Effect, GameState } from "../core/types.js";
 import type { BossDefinition } from "../core/types.js";
+import { getLegalActions } from "../control/playerActions.js";
 
 export function renderBattle(state: GameState, boss: BossDefinition): string {
   return [
@@ -8,11 +9,41 @@ export function renderBattle(state: GameState, boss: BossDefinition): string {
     "",
     renderMemory(state),
     "",
+    renderActions(state),
+    "",
     renderBoss(boss),
     "",
     "SYSTEM LOG",
     ...state.logs.slice(-10).map(renderLogEvent),
     "====================================================="
+  ].join("\n");
+}
+
+function renderActions(state: GameState): string {
+  if (state.phase === "game_over") {
+    return ["ACTIONS", `GAME OVER: ${state.winner?.toUpperCase() ?? "UNKNOWN"} won. q=quit | :restart`].join("\n");
+  }
+
+  const legalActions = getLegalActions(state);
+  const canCompile = legalActions.some((action) => action.type === "compile");
+  const playable = legalActions
+    .filter((action) => action.type === "play")
+    .map((action) => `${action.cacheIndex + 1}`)
+    .join(",");
+  const mountable = legalActions
+    .filter((action) => action.type === "mount")
+    .map((action) => `d${action.cacheIndex + 1}`)
+    .join(",");
+  const trappable = legalActions
+    .filter((action) => action.type === "trap")
+    .map((action) => `k${action.cacheIndex + 1}`)
+    .join(",");
+
+  return [
+    "ACTIONS",
+    `${canCompile ? "type intent or c <intent>" : "cache full"} | play: ${playable || "-"} | daemon: ${
+      mountable || "-"
+    } | kernel: ${trappable || "-"} | e=end | a=AI suggest | g=AI auto-turn | q=quit | :help`
   ].join("\n");
 }
 

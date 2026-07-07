@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import "dotenv/config";
 import { createProgram, parseCliOptions } from "./args.js";
+import { printAutoPlayerChallenge } from "../tui/autoPlayer.js";
 import { runTerminalGame } from "../tui/terminalGame.js";
 
 export async function main(argv = process.argv): Promise<void> {
@@ -9,6 +10,10 @@ export async function main(argv = process.argv): Promise<void> {
   program.action(async () => {
     const options = parseCliOptions(program.opts());
     const compilerMode = options.llm ? "llm" : "stub";
+    if (options.autoPlayer) {
+      await printAutoPlayerChallenge({ compilerMode, output: process.stdout });
+      return;
+    }
     await runTerminalGame({ compilerMode });
   });
 

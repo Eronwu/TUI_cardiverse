@@ -51,6 +51,7 @@ export async function runTerminalGame(options: RunTerminalGameOptions): Promise<
   }
 
   rl.close();
+  write(output, "\n");
 }
 
 function render(state: GameState, clearScreen: boolean): string {

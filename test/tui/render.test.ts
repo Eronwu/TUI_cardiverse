@@ -12,6 +12,7 @@ describe("renderBattle", () => {
     expect(output).toContain("PLAYER hp:100/100 sanity:100/100 ram:10/20");
     expect(output).toContain("BOSS hp:120/120 sanity:90/90 ram:0/18");
     expect(output).toContain("CACHE  [empty]");
+    expect(output).toContain("type intent or c <intent>");
     expect(output).toContain("INIT ECHO");
     expect(output).toContain("SYSTEM LOG");
   });

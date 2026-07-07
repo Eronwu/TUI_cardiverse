@@ -3,6 +3,7 @@ import { Command } from "commander";
 export type CliOptions = {
   llm: boolean;
   debug: boolean;
+  autoPlayer: boolean;
   provider?: "ollama" | "openai";
 };
 
@@ -13,6 +14,7 @@ export function createProgram(): Command {
     .version("0.1.0")
     .option("--llm", "enable the configured LLM compiler", false)
     .option("--no-llm", "force the local stub compiler")
+    .option("--auto-player", "let the rule-based AI play the challenge")
     .option("--provider <provider>", "set LLM provider: ollama or openai")
     .option("--debug", "enable debug output", false);
 }
@@ -20,6 +22,7 @@ export function createProgram(): Command {
 export function parseCliOptions(rawOptions: {
   llm?: boolean;
   debug?: boolean;
+  autoPlayer?: boolean;
   provider?: string;
 }): CliOptions {
   const provider = parseProvider(rawOptions.provider);
@@ -27,6 +30,7 @@ export function parseCliOptions(rawOptions: {
   return {
     llm: rawOptions.llm ?? false,
     debug: rawOptions.debug ?? false,
+    autoPlayer: rawOptions.autoPlayer ?? false,
     ...(provider ? { provider } : {})
   };
 }

@@ -710,6 +710,24 @@ Responsibilities:
 
 ## 10. Command Design
 
+### 10.0 Interaction v0.2
+
+The terminal should not require players to memorize command syntax.
+
+Default input behavior:
+
+- Plain natural language is treated as a compile prompt.
+- `1-5` plays cache cards.
+- `d1-d5` mounts daemon cards.
+- `k1-k5` arms kernel cards.
+- `e` ends turn.
+- `a` asks for an AI suggestion.
+- `g` lets AI play the current turn.
+- `q` quits.
+- `:` prefixes power-user commands, such as `:log` or `:save-log`.
+
+AI control is handled through structured `PlayerAction` values. AI cannot directly mutate `GameState`; actions are validated and dispatched through the same path used by human commands.
+
 ### 10.1 Command Type
 
 ```ts
