@@ -216,6 +216,7 @@ fn doctor() -> Result<()> {
             println!("LLM_MODEL_NAME: {}", config.model);
             println!("LLM_API_KEY: present");
             println!("LLM_API_STYLE: {:?}", config.style);
+            println!("LLM_TIMEOUT_SECONDS: {}", config.timeout_seconds);
         }
         None => {
             println!("LLM_API_KEY: missing");

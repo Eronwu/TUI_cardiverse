@@ -50,6 +50,7 @@ LLM_API_BASE_URL=https://your-openai-compatible-host/v1
 LLM_API_KEY=...
 LLM_MODEL_NAME=...
 LLM_API_STYLE=auto
+LLM_TIMEOUT_SECONDS=25
 ```
 
 Native OpenAI fallback names also work:

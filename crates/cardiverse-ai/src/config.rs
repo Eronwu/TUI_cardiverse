@@ -23,6 +23,7 @@ pub struct LlmConfig {
     pub api_key: String,
     pub model: String,
     pub style: LlmStyle,
+    pub timeout_seconds: u64,
 }
 
 impl LlmConfig {
@@ -37,11 +38,17 @@ impl LlmConfig {
             .or_else(|_| env::var("OPENAI_MODEL"))
             .unwrap_or_else(|_| "gpt-4.1-mini".into());
         let style = LlmStyle::from_env_value(env::var("LLM_API_STYLE").ok());
+        let timeout_seconds = env::var("LLM_TIMEOUT_SECONDS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| (1..=120).contains(value))
+            .unwrap_or(25);
         Some(Self {
             base_url: base_url.trim_end_matches('/').into(),
             api_key,
             model,
             style,
+            timeout_seconds,
         })
     }
 }

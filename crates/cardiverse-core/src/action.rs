@@ -36,7 +36,16 @@ pub fn legal_actions(state: &GameState) -> Vec<LegalAction> {
         }
         if let Some(draft) = &state.draft {
             if state.player.ram >= draft.cost {
-                actions.push(LegalAction::UseDraft);
+                match draft.kind {
+                    CardKind::Attack => actions.push(LegalAction::UseDraft),
+                    CardKind::Daemon if state.player_memory.daemons.len() < 2 => {
+                        actions.push(LegalAction::UseDraft)
+                    }
+                    CardKind::Kernel if state.player_memory.kernel.is_none() => {
+                        actions.push(LegalAction::UseDraft)
+                    }
+                    _ => {}
+                }
             }
             if state.player_memory.cache.len() < 5 {
                 actions.push(LegalAction::CacheDraft);

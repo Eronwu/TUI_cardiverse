@@ -284,6 +284,12 @@ fn render_command_console(frame: &mut Frame, app: &App, area: Rect) {
         kernel_label(app)
     );
     let lines = vec![
+        Line::from(Span::styled(
+            action_focus(app),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from(Span::styled(app.status.clone(), status_style)),
         Line::from(Span::styled(memory, Style::default().fg(Color::Gray))),
         Line::from("F forge  Enter/Space execute  C cache  R rewrite  X discard  E end  A advise  G auto  ? help  Q quit"),
@@ -360,6 +366,12 @@ fn card_stage_lines(card: &CompiledCard, is_draft: bool) -> Vec<Line<'static>> {
         Line::from(""),
         Line::from(card.description.clone()),
         Line::from(""),
+        Line::from(Span::styled(
+            impact_text(card),
+            Style::default()
+                .fg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from(Span::styled(
             card.effects
                 .iter()
@@ -491,6 +503,38 @@ fn feature_color(app: &App) -> Color {
     }
 }
 
+fn action_focus(app: &App) -> String {
+    if app.loading.is_some() {
+        return "NOW: Wait for compiler validation".into();
+    }
+    if app.state.phase == GamePhase::GameOver {
+        return "NOW: Session closed. Press Q after reviewing the replay.".into();
+    }
+    if let Some(card) = &app.state.draft {
+        if app.state.player.ram >= card.cost {
+            return format!(
+                "NOW: Execute draft {} for {} RAM",
+                short_name(&card.name, 22),
+                card.cost
+            );
+        }
+        return format!(
+            "NOW: Cache or rewrite draft {}. RAM is short.",
+            short_name(&card.name, 22)
+        );
+    }
+    if let Some(card) = selected_cache(app) {
+        if app.state.player.ram >= card.cost {
+            return format!(
+                "NOW: Execute selected cache card {}",
+                short_name(&card.name, 22)
+            );
+        }
+        return "NOW: Forge a cheaper card or end turn to recover RAM".into();
+    }
+    "NOW: Forge a card with F, or end turn if you want RAM tempo".into()
+}
+
 fn actor_color(actor: ActorId) -> Color {
     match actor {
         ActorId::Player => Color::LightGreen,
@@ -552,6 +596,38 @@ fn effect_text(effect: &Effect) -> String {
     }
 }
 
+fn impact_text(card: &CompiledCard) -> String {
+    let impacts = card
+        .effects
+        .iter()
+        .map(|effect| match effect {
+            Effect::Damage { track, amount, .. } => {
+                format!("Impact: INIT ECHO -{amount} {}", track_text(*track))
+            }
+            Effect::Heal { track, amount, .. } => {
+                format!("Impact: OPERATOR +{amount} {}", track_text(*track))
+            }
+            Effect::GainRam { amount, .. } => format!("Impact: OPERATOR +{amount} RAM"),
+            Effect::Shield { track, amount, .. } => {
+                format!("Impact: OPERATOR +{amount} {} shield", track_text(*track))
+            }
+        })
+        .collect::<Vec<_>>();
+    format!(
+        "{}  //  Tempo: {}",
+        impacts.join(" | "),
+        tempo_text(card.kind)
+    )
+}
+
+fn tempo_text(kind: CardKind) -> &'static str {
+    match kind {
+        CardKind::Attack => "immediate",
+        CardKind::Daemon => "recurring",
+        CardKind::Kernel => "reactive",
+    }
+}
+
 fn track_text(track: Track) -> &'static str {
     match track {
         Track::Hp => "HP",
@@ -561,18 +637,25 @@ fn track_text(track: Track) -> &'static str {
 
 fn event_line(event: &GameEvent) -> String {
     match event {
-        GameEvent::System { turn, message } => format!("[{turn}] {message}"),
-        GameEvent::BossSpoke { turn, line } => format!("[{turn}] INIT ECHO: {line}"),
-        GameEvent::TurnStarted { turn, actor } => format!("[{turn}] {:?} turn", actor),
-        GameEvent::TurnEnded { turn, actor } => format!("[{turn}] {:?} end", actor),
+        GameEvent::System { turn, message } => format!("[{turn}] SYSTEM // {message}"),
+        GameEvent::BossSpoke { turn, line } => format!("[{turn}] INIT ECHO // {line}"),
+        GameEvent::TurnStarted { turn, actor } => {
+            format!("[{turn}] {} turn begins", actor_name(*actor))
+        }
+        GameEvent::TurnEnded { turn, actor } => {
+            format!("[{turn}] {} yields priority", actor_name(*actor))
+        }
         GameEvent::DraftForged { turn, card, .. } => {
-            format!("[{turn}] draft compiled: {} / {} RAM", card.name, card.cost)
+            format!(
+                "[{turn}] {} compiled as a draft / {} RAM",
+                card.name, card.cost
+            )
         }
         GameEvent::DraftRejected { turn, reason, .. } => {
             format!("[{turn}] draft rejected: {reason}")
         }
         GameEvent::CardCached { turn, card_name } => {
-            format!("[{turn}] cached {}", short_name(card_name, 24))
+            format!("[{turn}] {} stored in cache", short_name(card_name, 24))
         }
         GameEvent::CardPlayed {
             turn,
@@ -580,8 +663,8 @@ fn event_line(event: &GameEvent) -> String {
             card_name,
             cost,
         } => format!(
-            "[{turn}] {:?} executes {} / -{cost} RAM",
-            actor,
+            "[{turn}] {} executes {} / -{cost} RAM",
+            actor_name(*actor),
             short_name(card_name, 24)
         ),
         GameEvent::EffectApplied {
@@ -591,15 +674,49 @@ fn event_line(event: &GameEvent) -> String {
             effect,
             ..
         } => format!(
-            "[{turn}] {:?} {} / {amount_applied}",
-            target,
-            effect_text(effect)
+            "[{turn}] {}",
+            effect_sentence(*target, effect, *amount_applied)
         ),
         GameEvent::Winner {
             turn,
             winner,
             reason,
-        } => format!("[{turn}] {:?} wins: {reason}", winner),
+        } => format!("[{turn}] {} wins: {reason}", actor_name(*winner)),
+    }
+}
+
+fn effect_sentence(target: ActorId, effect: &Effect, amount_applied: i32) -> String {
+    match effect {
+        Effect::Damage { track, .. } => {
+            format!(
+                "{} -{} {}",
+                actor_name(target),
+                amount_applied,
+                track_text(*track)
+            )
+        }
+        Effect::Heal { track, .. } => {
+            format!(
+                "{} +{} {}",
+                actor_name(target),
+                amount_applied,
+                track_text(*track)
+            )
+        }
+        Effect::GainRam { .. } => format!("{} +{} RAM", actor_name(target), amount_applied),
+        Effect::Shield { track, .. } => format!(
+            "{} gains {} {} shield",
+            actor_name(target),
+            amount_applied,
+            track_text(*track)
+        ),
+    }
+}
+
+fn actor_name(actor: ActorId) -> &'static str {
+    match actor {
+        ActorId::Player => "OPERATOR",
+        ActorId::Boss => "INIT ECHO",
     }
 }
 
@@ -641,6 +758,7 @@ mod tests {
         assert!(text.contains("INIT ECHO"));
         assert!(text.contains("CACHE TRACK"));
         assert!(text.contains("COMMAND LINE"));
+        assert!(text.contains("NOW:"));
     }
 
     #[test]
@@ -655,6 +773,7 @@ mod tests {
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("DRAFT CARD"));
         assert!(text.contains("DRAFT READY"));
+        assert!(text.contains("Impact:"));
     }
 
     fn buffer_text(buffer: &ratatui::buffer::Buffer) -> String {

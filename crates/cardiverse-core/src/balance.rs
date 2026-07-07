@@ -42,6 +42,7 @@ pub fn validate_and_balance_card(
     for effect in &mut card.effects {
         clamp_effect(effect)?;
     }
+    protect_minimum_play_value(&mut card);
 
     match card.kind {
         CardKind::Attack => {
@@ -133,6 +134,19 @@ fn clamp_effect(effect: &mut Effect) -> Result<(), ValidationError> {
     Ok(())
 }
 
+fn protect_minimum_play_value(card: &mut CompiledCard) {
+    let min_damage = match card.kind {
+        CardKind::Attack => 12,
+        CardKind::Daemon => 6,
+        CardKind::Kernel => 8,
+    };
+    for effect in &mut card.effects {
+        if let Effect::Damage { amount, .. } = effect {
+            *amount = (*amount).max(min_damage);
+        }
+    }
+}
+
 fn clean_text(value: &str, max_len: usize) -> String {
     value
         .chars()
@@ -181,5 +195,37 @@ mod tests {
         assert_eq!(balanced.cost, 9);
         assert_eq!(balanced.duration, None);
         assert_eq!(balanced.source_prompt.as_deref(), Some("create fire angel"));
+    }
+
+    #[test]
+    fn protects_generated_attacks_from_tiny_damage() {
+        let card = CompiledCard {
+            id: String::new(),
+            kind: CardKind::Attack,
+            name: "Low-Power Strike".into(),
+            description: "too weak".into(),
+            target: Target::Enemy,
+            cost: 4,
+            effects: vec![Effect::Damage {
+                track: Track::Hp,
+                amount: 2,
+                target: Target::Enemy,
+            }],
+            tags: vec!["economy".into()],
+            duration: None,
+            trigger: None,
+            backlash: None,
+            source_prompt: None,
+        };
+        let balanced = validate_and_balance_card(card, Some("low ram damage")).unwrap();
+        assert_eq!(
+            balanced.effects[0],
+            Effect::Damage {
+                track: Track::Hp,
+                amount: 12,
+                target: Target::Enemy,
+            }
+        );
+        assert!(balanced.cost >= 5);
     }
 }

@@ -5,6 +5,7 @@ use cardiverse_core::{
 };
 use reqwest::Client;
 use serde_json::{json, Value};
+use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,7 +114,11 @@ pub fn stub_compile_card(prompt: &str) -> Result<CompiledCard, AiError> {
 }
 
 async fn compile_with_llm(config: &LlmConfig, prompt: &str) -> Result<CompiledCard, AiError> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(config.timeout_seconds))
+        .connect_timeout(Duration::from_secs(config.timeout_seconds.min(10)))
+        .build()
+        .map_err(|err| AiError::Request(err.to_string()))?;
     match config.style {
         LlmStyle::Responses => request_responses(&client, config, prompt).await,
         LlmStyle::ChatCompletions => request_chat_completions(&client, config, prompt).await,

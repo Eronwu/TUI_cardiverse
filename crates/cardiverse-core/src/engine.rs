@@ -117,7 +117,7 @@ pub fn apply_action(
         PlayerAction::UseDraft => {
             ensure_player_turn(state)?;
             let card = state.draft.take().ok_or(GameError::NoDraft)?;
-            play_player_card(state, card)?;
+            use_draft_card(state, card)?;
         }
         PlayerAction::CacheDraft => {
             ensure_player_turn(state)?;
@@ -204,6 +204,33 @@ pub fn apply_action(
     Ok(state.events[before..].to_vec())
 }
 
+fn use_draft_card(state: &mut GameState, card: CompiledCard) -> Result<(), GameError> {
+    match card.kind {
+        CardKind::Attack => play_player_card(state, card),
+        CardKind::Daemon => {
+            if state.player_memory.daemons.len() >= 2 {
+                return Err(GameError::DaemonFull);
+            }
+            spend_ram(&mut state.player, card.cost)?;
+            push_played(state, ActorId::Player, &card);
+            state.player_memory.daemons.push(ActiveDaemon {
+                remaining_turns: card.duration.unwrap_or(3),
+                card,
+            });
+            Ok(())
+        }
+        CardKind::Kernel => {
+            if state.player_memory.kernel.is_some() {
+                return Err(GameError::KernelFull);
+            }
+            spend_ram(&mut state.player, card.cost)?;
+            push_played(state, ActorId::Player, &card);
+            state.player_memory.kernel = Some(ActiveKernel { card });
+            Ok(())
+        }
+    }
+}
+
 fn ensure_player_turn(state: &GameState) -> Result<(), GameError> {
     if state.phase == GamePhase::GameOver {
         return Err(GameError::GameOver);
@@ -240,14 +267,7 @@ fn run_boss_turn(state: &mut GameState) {
     );
 
     state.boss.ram = (state.boss.ram + state.boss.ram_gain_per_turn).min(state.boss.max_ram);
-    let playable = state
-        .boss_memory
-        .cache
-        .iter()
-        .enumerate()
-        .filter(|(_, card)| card.cost <= state.boss.ram)
-        .max_by_key(|(_, card)| card.cost)
-        .map(|(index, _)| index);
+    let playable = choose_boss_card(state);
     if let Some(index) = playable {
         let card = state.boss_memory.cache[index].clone();
         if spend_ram(&mut state.boss, card.cost).is_ok() {
@@ -283,6 +303,31 @@ fn run_boss_turn(state: &mut GameState) {
         },
     );
     check_winner(state);
+}
+
+fn choose_boss_card(state: &GameState) -> Option<usize> {
+    let playable = state
+        .boss_memory
+        .cache
+        .iter()
+        .enumerate()
+        .filter(|(_, card)| card.cost <= state.boss.ram)
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if playable.is_empty() {
+        return None;
+    }
+
+    let preferred_id = match state.turn % 3 {
+        1 => "boss-null-sermon",
+        2 => "boss-checksum-bite",
+        _ => "boss-parity-shell",
+    };
+    playable
+        .iter()
+        .copied()
+        .find(|index| state.boss_memory.cache[*index].id == preferred_id)
+        .or_else(|| playable.first().copied())
 }
 
 fn tick_daemons(state: &mut GameState) {
@@ -489,6 +534,74 @@ mod tests {
         apply_action(&mut state, PlayerAction::UseDraft).unwrap();
         assert!(state.player.ram < 10);
         assert_eq!(state.boss.hp, 108);
+    }
+
+    #[test]
+    fn boss_rotates_between_pressure_cards() {
+        let mut state = new_game(&init_echo());
+        apply_action(&mut state, PlayerAction::EndTurn).unwrap();
+        let boss_cards = state
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                GameEvent::CardPlayed {
+                    actor: ActorId::Boss,
+                    card_name,
+                    ..
+                } => Some(card_name.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(boss_cards, vec!["Null Sermon"]);
+
+        apply_action(&mut state, PlayerAction::EndTurn).unwrap();
+        let boss_cards = state
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                GameEvent::CardPlayed {
+                    actor: ActorId::Boss,
+                    card_name,
+                    ..
+                } => Some(card_name.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(boss_cards.contains(&"Checksum Bite".to_string()));
+    }
+
+    #[test]
+    fn using_daemon_draft_mounts_it_instead_of_discarding() {
+        let mut state = new_game(&init_echo());
+        let daemon = CompiledCard {
+            id: "test-daemon".into(),
+            kind: CardKind::Daemon,
+            name: "Shield Loop".into(),
+            description: "persistent shield".into(),
+            target: Target::SelfActor,
+            cost: 1,
+            effects: vec![Effect::Shield {
+                track: Track::Hp,
+                amount: 8,
+                target: Target::SelfActor,
+            }],
+            tags: vec![],
+            duration: Some(3),
+            trigger: None,
+            backlash: None,
+            source_prompt: None,
+        };
+        apply_action(
+            &mut state,
+            PlayerAction::ForgeDraft {
+                prompt: "shield loop".into(),
+                card: daemon,
+            },
+        )
+        .unwrap();
+        apply_action(&mut state, PlayerAction::UseDraft).unwrap();
+        assert_eq!(state.player_memory.daemons.len(), 1);
+        assert_eq!(state.player_memory.discard.len(), 0);
     }
 
     proptest! {

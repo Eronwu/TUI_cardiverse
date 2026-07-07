@@ -171,15 +171,10 @@ pub fn decide(policy: AgentPolicy, observation: &AgentObservation) -> AgentDecis
         return action;
     }
 
-    if state.player_memory.cache.len() < 5 && state.player.ram >= 3 {
-        let prompt = match policy {
-            AgentPolicy::Rule => "thermal spike with clean hp damage",
-            AgentPolicy::Llm => "创建一个立即生效的终端攻击卡，造成稳定 HP 伤害，低 RAM 消耗",
-        };
+    if should_forge(observation) {
+        let prompt = forge_prompt(policy, observation);
         return decision(
-            AgentAction::Forge {
-                prompt: prompt.into(),
-            },
+            AgentAction::Forge { prompt },
             "no strong cached play is available, so create a new tactical option",
             "convert natural language intent into a validated draft",
             "LLM output may normalize into a weaker card",
@@ -192,6 +187,56 @@ pub fn decide(policy: AgentPolicy, observation: &AgentObservation) -> AgentDecis
         "bank the next RAM pulse and let daemons tick",
         "boss receives a full response turn",
     )
+}
+
+fn should_forge(observation: &AgentObservation) -> bool {
+    let state = &observation.state;
+    if state.player_memory.cache.len() >= 5 || state.player.ram < 3 {
+        return false;
+    }
+    if forged_this_turn(state) >= 1 {
+        return false;
+    }
+    if state
+        .player_memory
+        .cache
+        .iter()
+        .any(|card| card.cost <= state.player.ram)
+    {
+        return false;
+    }
+    true
+}
+
+fn forged_this_turn(state: &GameState) -> usize {
+    state
+        .events
+        .iter()
+        .filter(|event| matches!(event, GameEvent::DraftForged { turn, .. } if *turn == state.turn))
+        .count()
+}
+
+fn forge_prompt(policy: AgentPolicy, observation: &AgentObservation) -> String {
+    match policy {
+        AgentPolicy::Rule => {
+            if observation.state.player_memory.daemons.is_empty() && observation.state.turn >= 2 {
+                "daemon shield loop with recurring hp protection".into()
+            } else if observation.state.boss.sanity < observation.state.boss.hp {
+                "paradox spike with clean sanity damage".into()
+            } else {
+                "thermal spike with clean hp damage".into()
+            }
+        }
+        AgentPolicy::Llm => {
+            if observation.state.player_memory.daemons.is_empty() && observation.state.turn >= 2 {
+                "创建一张可玩的 daemon 防御卡，持续 3 回合，每回合提供 HP 护盾，效果必须值得花费 RAM".into()
+            } else if observation.state.boss.sanity < observation.state.boss.hp {
+                "创建一张立即生效的终端攻击卡，造成至少 12 点 sanity 伤害，RAM 消耗合理，不要生成低伤害卡".into()
+            } else {
+                "创建一张立即生效的终端攻击卡，造成至少 12 点 HP 伤害，RAM 消耗合理，不要生成低伤害卡".into()
+            }
+        }
+    }
 }
 
 pub async fn execute_agent_action(
@@ -512,5 +557,18 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn avoids_repeated_forging_in_same_turn() {
+        let mut state = new_game(&init_echo());
+        state.events.push(GameEvent::DraftForged {
+            turn: state.turn,
+            prompt: "already forged".into(),
+            card: cardiverse_ai::stub_compile_card("thermal spike").unwrap(),
+        });
+        let observation = observe(&state);
+        let decision = decide(AgentPolicy::Rule, &observation);
+        assert!(!matches!(decision.action, AgentAction::Forge { .. }));
     }
 }
