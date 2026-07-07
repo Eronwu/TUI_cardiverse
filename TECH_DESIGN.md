@@ -1,9 +1,9 @@
 # Technical Design - Terminal Cardiverse
 
-**Version:** v0.1  
-**Date:** 2026-07-07  
-**Related PRD:** `PRD.md` v0.3  
-**Stage:** Terminal-native MVP  
+**Version:** v0.2
+**Date:** 2026-07-08
+**Related PRD:** `PRD.md` v0.4
+**Stage:** Rust + Ratatui experience build
 
 ---
 
@@ -11,17 +11,19 @@
 
 This document translates the PRD into an implementable technical plan.
 
-The MVP target is:
+The current implementation direction is:
 
-> A Node.js CLI / Terminal TUI game that can run one complete PVE battle against INIT ECHO without requiring a real LLM.
+> A Rust + Ratatui terminal cockpit that can run one complete PVE battle against INIT ECHO, compile prompt intent into draft cards, save deterministic replay JSON, and run without a real LLM.
 
 The first playable version should prove:
 
 - The core battle engine is deterministic and testable.
 - Prompt compilation can be stubbed locally.
-- The TUI can drive the game through keyboard commands.
+- The Ratatui cockpit can drive the game through keyboard commands.
 - Battle logs can be displayed and saved.
-- Real LLM integration can be added later without changing the battle rules.
+- Real LLM integration cannot change battle rules and only produces locally validated draft cards.
+
+The previous TypeScript implementation remains in the repo as a playable prototype and oracle for migration scenarios.
 
 ---
 
@@ -29,64 +31,43 @@ The first playable version should prove:
 
 ### 2.1 Runtime
 
-- Language: TypeScript
-- Runtime: Node.js
-- Module system: ESM
-- Package manager: npm
+- Language: Rust
+- Package manager: Cargo
+- Terminal UI: Ratatui + Crossterm
+- Async runtime: Tokio
 
 ### 2.2 CLI
 
-Recommended:
-
-- `commander` for CLI flags and subcommands.
-
-MVP CLI:
+The Rust CLI exposes:
 
 ```bash
 cardiverse
-cardiverse --help
-cardiverse --version
-cardiverse --no-llm
-cardiverse --debug
+cardiverse play --no-ai
+cardiverse replay <file>
+cardiverse doctor
 ```
 
 ### 2.3 Terminal TUI
 
-Recommended first choice:
-
-- `Ink`
+The experience build uses `ratatui`.
 
 Reason:
 
-- Component model is clean.
-- Works well with TypeScript.
-- Easier to structure status panels, logs, command input, and modal views.
-- Future code reuse with React-like mental model is valuable, even though this is not a web app.
-
-Fallback:
-
-- `blessed`
-
-Use `blessed` only if Ink becomes painful for command input, focus management, or terminal redraw performance.
+- Higher ceiling for terminal game visuals.
+- Mature layout, gauge, list, paragraph, and block primitives.
+- Works well with a pure Rust deterministic core.
+- Supports a full-screen cockpit rather than readline-style prompts.
 
 ### 2.4 Validation
 
-Recommended:
-
-- `zod`
-
-Used for:
-
-- Card DSL validation.
-- Config validation.
-- Imported content validation.
-- Future LLM output validation.
+Rust validation uses `serde` plus local validator/balancer functions. LLM output is never trusted directly.
 
 ### 2.5 Testing
 
 Recommended:
 
-- `vitest`
+- Rust unit tests and property tests for new crates.
+- Existing Vitest suite remains for the TypeScript prototype.
 
 Test priority:
 
@@ -101,13 +82,12 @@ TUI snapshot tests are optional and should not block MVP.
 
 Recommended:
 
-- `tsup` for building TypeScript ESM CLI output.
+- `cargo install --path crates/cardiverse-cli` during local development.
 
-Expected package output:
+Expected binary:
 
 ```txt
-dist/
-  cli.js
+cardiverse
 ```
 
 `package.json` should expose:
@@ -159,89 +139,56 @@ Core must not import:
 - File system utilities.
 - Environment variables.
 
-Compiler may import:
+AI/compiler may import:
 
 - Core types.
-- Schema.
 - Balance utilities.
+- HTTP clients.
+- Environment-derived config.
 
 TUI may import:
 
 - Core public APIs.
-- Compiler public APIs.
-- Storage utilities.
-- Command parser.
+- AI/compiler public APIs.
+- Replay utilities.
+
+The TypeScript `src/` tree is now historical prototype code. New gameplay work should happen in `crates/`.
 
 ---
 
 ## 4. Project Structure
 
-Recommended MVP structure:
+Current Rust workspace structure:
 
 ```txt
+crates/
+  cardiverse-core/
+    src/types.rs
+    src/engine.rs
+    src/action.rs
+    src/balance.rs
+    src/content.rs
+    src/replay.rs
+
+  cardiverse-ai/
+    src/config.rs
+    src/compiler.rs
+    src/normalizer.rs
+    src/suggest.rs
+
+  cardiverse-tui/
+    src/app.rs
+    src/render.rs
+    src/replay.rs
+
+  cardiverse-cli/
+    src/main.rs
+
 src/
-  cli/
-    index.ts
-    args.ts
-
-  tui/
-    App.tsx
-    BattleScreen.tsx
-    components/
-      StatusPanel.tsx
-      MemoryPanel.tsx
-      BossPanel.tsx
-      LogPanel.tsx
-      CommandInput.tsx
-      HelpView.tsx
-
-  commands/
-    parser.ts
-    handlers.ts
-    types.ts
-
-  core/
-    types.ts
-    state.ts
-    effects.ts
-    turn.ts
-    actions.ts
-    bossAi.ts
-    winner.ts
-    log.ts
-
-  compiler/
-    schema.ts
-    stubCompiler.ts
-    balance.ts
-    errors.ts
-    types.ts
-    providers/
-      types.ts
-      ollama.ts
-      openai.ts
-
-  content/
-    bosses/
-      initEcho.ts
-    starterCards.ts
-
-  storage/
-    paths.ts
-    config.ts
-    battleLog.ts
-
-  sim/
-    headless.ts
-    benchmark.ts
-
-test/
-  core/
-  compiler/
-  commands/
+  ... TypeScript prototype retained for migration reference
 ```
 
-MVP can create provider files as stubs, but real LLM provider implementation should wait until after core and TUI are playable.
+The Rust implementation already includes a stub compiler and an OpenAI-compatible compiler. LLM output always enters the draft flow and never mutates battle state directly.
 
 ---
 

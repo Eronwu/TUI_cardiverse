@@ -2,7 +2,61 @@
 
 Terminal Cardiverse is a terminal-native prompt-compiled card strategy game.
 
-The MVP runs entirely in your shell. It does not require a real LLM key; the local stub compiler is enough to challenge the first Boss, `INIT ECHO`.
+The original TypeScript prototype remains in this repo as the rule reference. The next-generation playable is now a Rust + Ratatui terminal cockpit: full-screen battle UI, AI card drafting, keyboard-first controls, and deterministic replay files.
+
+It does not require a real LLM key; the local stub compiler is enough to challenge the first Boss, `INIT ECHO`.
+
+## Rust Rebirth Run
+
+Install with Cargo once Rust is available:
+
+```bash
+cargo install --path crates/cardiverse-cli
+cardiverse
+```
+
+Development run:
+
+```bash
+cargo run -p cardiverse-cli -- play --no-ai
+```
+
+Commands:
+
+```bash
+cardiverse                  # start battle cockpit
+cardiverse play --no-ai      # force deterministic local card generation
+cardiverse replay <file>     # print a deterministic replay
+cardiverse doctor            # check terminal and LLM env
+```
+
+The Rust cockpit controls are:
+
+```txt
+F            forge an AI/stub draft card
+Enter/Space  use current draft, or play selected cache card
+Left/Right   select cache card
+C            cache current draft
+R            rewrite current draft
+X            discard current draft
+E            end turn
+A            ask AI advisor for a legal suggestion
+G            let the rules-only AI play legal actions
+?            help
+Q            quit
+```
+
+Replay JSON is saved after each session. By default it goes to the local application data directory; use `--save-replay <path>` to choose a file.
+
+AI card generation is a core path. When changing compiler or card DSL behavior, run the live `.env` smoke test as well as the normal suite:
+
+```bash
+cargo test -p cardiverse-ai live_llm_compile_accepts_project_env -- --ignored --nocapture
+```
+
+This test loads the project `.env` and makes a real OpenAI-compatible LLM request. It should not print the API key.
+
+## TypeScript Prototype
 
 ## Run
 
